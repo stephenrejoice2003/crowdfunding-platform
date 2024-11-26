@@ -97,12 +97,12 @@ const HomePage = () => {
                 others.
               </p>
             </div>
-            {/* <div className="p-6 bg-blue-50 rounded-lg shadow-md animate-zoom-in">
-              <h3 className="text-xl font-semibold text-blue-500">Trust</h3>
-              <p className="mt-2 text-gray-600">
-                Be rest assured that your donations are used wisely and for the right reasons.
-              </p>
-            </div> */}
+                {/* <div className="p-6 bg-blue-50 rounded-lg shadow-md animate-zoom-in">
+                <h3 className="text-xl font-semibold text-blue-500">Trust</h3>
+                <p className="mt-2 text-gray-600">
+                    Be rest assured that your donations are used wisely and for the right reasons.
+                </p>
+                </div> */}
           </div>
         </div>
       </section>
