@@ -161,3 +161,63 @@
     new-id
   )
 )
+
+
+(define-map project-categories 
+  { project-id: uint }
+  { category: (string-ascii 64) }
+)
+
+(define-public (set-project-category (project-id uint) (category (string-ascii 64)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-categories 
+      { project-id: project-id }
+      { category: category }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map staker-rewards
+  { project-id: uint, staker: principal }
+  { reward-tier: uint }
+)
+
+(define-public (set-staker-reward-tier (project-id uint) (staker principal) (tier uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (stake-info (unwrap! (map-get? stakes { project-id: project-id, staker: staker }) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set staker-rewards
+      { project-id: project-id, staker: staker }
+      { reward-tier: tier }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map project-ratings
+  { project-id: uint, rater: principal }
+  { rating: uint }
+)
+
+(define-public (rate-project (project-id uint) (rating uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (stake-info (unwrap! (map-get? stakes { project-id: project-id, staker: tx-sender }) (err u404)))
+  )
+    (asserts! (<= rating u5) (err u400))
+    (asserts! (> rating u0) (err u400))
+    (map-set project-ratings
+      { project-id: project-id, rater: tx-sender }
+      { rating: rating }
+    )
+    (ok true)
+  )
+)
