@@ -200,3 +200,24 @@
     (ok true)
   )
 )
+
+
+(define-map project-ratings
+  { project-id: uint, rater: principal }
+  { rating: uint }
+)
+
+(define-public (rate-project (project-id uint) (rating uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (stake-info (unwrap! (map-get? stakes { project-id: project-id, staker: tx-sender }) (err u404)))
+  )
+    (asserts! (<= rating u5) (err u400))
+    (asserts! (> rating u0) (err u400))
+    (map-set project-ratings
+      { project-id: project-id, rater: tx-sender }
+      { rating: rating }
+    )
+    (ok true)
+  )
+)
