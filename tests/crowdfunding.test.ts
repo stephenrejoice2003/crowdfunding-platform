@@ -6,7 +6,6 @@ const mockToken = {
 };
 
 // Declare a variable for your contract instance
-let contract: any;
 
 // Mocking the contract calls
 const mockContractCalls = {
@@ -15,7 +14,12 @@ const mockContractCalls = {
     'add-milestone': vi.fn(),
     'complete-milestone': vi.fn(),
     'claim-refund': vi.fn(),
+    'set-project-category': vi.fn(),
+    'set-staker-reward-tier': vi.fn(),
+    'rate-project': vi.fn(),
 };
+
+let contract: any;
 
 beforeEach(() => {
     // Reset all mocks before each test
@@ -87,7 +91,43 @@ describe('Crowdfunding Smart Contract Tests', () => {
     });
 });
 
-// Cleanup after tests if necessary
+
+describe('Project Categories Tests', () => {
+    it('should set a project category', async () => {
+        mockContractCalls['set-project-category'].mockImplementation(() => true);
+
+        const result = await contract.call('set-project-category', {
+            project_id: 1,
+            category: "Technology"
+        });
+
+        expect(result).toBe(true);
+        expect(mockContractCalls['set-project-category']).toHaveBeenCalledWith({
+            project_id: 1,
+            category: "Technology"
+        });
+    });
+});
+
+describe('Staker Rewards Tests', () => {
+    it('should set staker reward tier', async () => {
+        mockContractCalls['set-staker-reward-tier'].mockImplementation(() => true);
+
+        const result = await contract.call('set-staker-reward-tier', {
+            project_id: 1,
+            staker: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+            tier: 2
+        });
+
+        expect(result).toBe(true);
+        expect(mockContractCalls['set-staker-reward-tier']).toHaveBeenCalledWith({
+            project_id: 1,
+            staker: 'ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM',
+            tier: 2
+        });
+    });
+});
+
 afterEach(() => {
-    // Perform any cleanup actions if needed
+    // Cleanup
 });
