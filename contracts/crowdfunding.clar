@@ -161,3 +161,22 @@
     new-id
   )
 )
+
+
+(define-map project-categories 
+  { project-id: uint }
+  { category: (string-ascii 64) }
+)
+
+(define-public (set-project-category (project-id uint) (category (string-ascii 64)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-categories 
+      { project-id: project-id }
+      { category: category }
+    )
+    (ok true)
+  )
+)
