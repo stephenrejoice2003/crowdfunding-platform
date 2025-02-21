@@ -221,3 +221,177 @@
     (ok true)
   )
 )
+
+
+
+(define-map project-tags
+  { project-id: uint }
+  { tags: (list 10 (string-ascii 20)) }
+)
+
+(define-public (set-project-tags (project-id uint) (tags (list 10 (string-ascii 20))))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-tags { project-id: project-id } { tags: tags })
+    (ok true)
+  )
+)
+
+
+
+(define-map project-progress
+  { project-id: uint }
+  {
+    percentage-complete: uint,
+    last-update: uint
+  }
+)
+
+(define-public (update-project-progress (project-id uint) (percentage uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (<= percentage u100) (err u400))
+    (map-set project-progress
+      { project-id: project-id }
+      { percentage-complete: percentage, last-update: block-height }
+    )
+    (ok true)
+  )
+)
+
+
+
+;; Add this map to track project updates
+(define-map project-updates
+  { project-id: uint, update-id: uint }
+  {
+    title: (string-ascii 100),
+    content: (string-ascii 500),
+    timestamp: uint
+  }
+)
+
+(define-public (post-project-update (project-id uint) (title (string-ascii 100)) (content (string-ascii 500)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (update-id (increment-last-update-id project-id))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-updates
+      { project-id: project-id, update-id: update-id }
+      { title: title, content: content, timestamp: block-height }
+    )
+    (ok update-id)
+  )
+)
+
+;; Map to store the last update ID for each project
+(define-map last-update-id-map uint uint)
+
+;; Helper function to get the last update ID
+(define-private (get-last-update-id (project-id uint))
+  (default-to u0 (map-get? last-update-id-map project-id))
+)
+
+;; Helper function to increment the last update ID
+(define-private (increment-last-update-id (project-id uint))
+  (let (
+    (current-id (get-last-update-id project-id))
+    (new-id (+ current-id u1))
+  )
+    (map-set last-update-id-map project-id new-id)
+    new-id
+  )
+)
+
+
+
+(define-map project-comments
+  { project-id: uint, comment-id: uint }
+  {
+    author: principal,
+    content: (string-ascii 280),
+    timestamp: uint
+  }
+)
+
+(define-public (add-comment (project-id uint) (content (string-ascii 280)))
+  (let (
+    (comment-id (increment-last-comment-id project-id))
+  )
+    (map-set project-comments
+      { project-id: project-id, comment-id: comment-id }
+      { author: tx-sender, content: content, timestamp: block-height }
+    )
+    (ok comment-id)
+  )
+)
+
+
+;; Map to store the last comment ID for each project
+(define-map last-comment-id-map uint uint)
+
+;; Helper function to get the last comment ID
+(define-private (get-last-comment-id (project-id uint))
+  (default-to u0 (map-get? last-comment-id-map project-id))
+)
+
+;; Helper function to increment the last comment ID
+(define-private (increment-last-comment-id (project-id uint))
+  (let (
+    (current-id (get-last-comment-id project-id))
+    (new-id (+ current-id u1))
+  )
+    (map-set last-comment-id-map project-id new-id)
+    new-id
+  )
+)
+
+
+
+(define-map funding-tiers
+  { project-id: uint, tier-id: uint }
+  {
+    name: (string-ascii 50),
+    amount: uint,
+    rewards: (string-ascii 200)
+  }
+)
+
+(define-public (create-funding-tier (project-id uint) (name (string-ascii 50)) (amount uint) (rewards (string-ascii 200)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (tier-id (increment-last-tier-id project-id))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set funding-tiers
+      { project-id: project-id, tier-id: tier-id }
+      { name: name, amount: amount, rewards: rewards }
+    )
+    (ok tier-id)
+  )
+)
+
+
+;; Map to store the last tier ID for each project
+(define-map last-tier-id-map uint uint)
+
+;; Helper function to get the last tier ID
+(define-private (get-last-tier-id (project-id uint))
+  (default-to u0 (map-get? last-tier-id-map project-id))
+)
+
+;; Helper function to increment the last tier ID
+(define-private (increment-last-tier-id (project-id uint))
+  (let (
+    (current-id (get-last-tier-id project-id))
+    (new-id (+ current-id u1))
+  )
+    (map-set last-tier-id-map project-id new-id)
+    new-id
+  )
+)
