@@ -478,3 +478,39 @@
     (ok faq-id)
   )
 )
+
+
+
+(define-map social-metrics
+  { project-id: uint }
+  {
+    shares: uint,
+    likes: uint,
+    last-updated: uint
+  }
+)
+
+(define-public (increment-social-metric (project-id uint) (metric-type (string-ascii 10)))
+  (let (
+    (current-metrics (default-to { shares: u0, likes: u0, last-updated: u0 } 
+                     (map-get? social-metrics { project-id: project-id })))
+  )
+    (map-set social-metrics
+      { project-id: project-id }
+      (match metric-type
+        "share" { 
+          shares: (+ (get shares current-metrics) u1),
+          likes: (get likes current-metrics),
+          last-updated: block-height 
+        }
+        "like" { 
+          shares: (get shares current-metrics),
+          likes: (+ (get likes current-metrics) u1),
+          last-updated: block-height 
+        }
+        current-metrics
+      )
+    )
+    (ok true)
+  )
+)
