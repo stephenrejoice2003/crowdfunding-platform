@@ -451,3 +451,30 @@
     (ok true)
   )
 )
+
+
+
+(define-map project-faqs
+  { project-id: uint, faq-id: uint }
+  {
+    question: (string-ascii 200),
+    answer: (string-ascii 500)
+  }
+)
+
+(define-map last-faq-id uint uint)
+
+(define-public (add-faq (project-id uint) (question (string-ascii 200)) (answer (string-ascii 500)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (faq-id (+ (default-to u0 (map-get? last-faq-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-faqs
+      { project-id: project-id, faq-id: faq-id }
+      { question: question, answer: answer }
+    )
+    (map-set last-faq-id project-id faq-id)
+    (ok faq-id)
+  )
+)
