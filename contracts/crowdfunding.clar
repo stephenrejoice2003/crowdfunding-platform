@@ -481,36 +481,39 @@
 
 
 
-(define-map social-metrics
-  { project-id: uint }
+(define-map project-timeline
+  { project-id: uint, event-id: uint }
   {
-    shares: uint,
-    likes: uint,
-    last-updated: uint
+    title: (string-ascii 100),
+    description: (string-ascii 500),
+    date: uint,
+    event-type: (string-ascii 20)
   }
 )
 
-(define-public (increment-social-metric (project-id uint) (metric-type (string-ascii 10)))
-  (let (
-    (current-metrics (default-to { shares: u0, likes: u0, last-updated: u0 } 
-                     (map-get? social-metrics { project-id: project-id })))
+(define-map last-event-id uint uint)
+
+(define-public (add-timeline-event 
+    (project-id uint) 
+    (title (string-ascii 100)) 
+    (description (string-ascii 500))
+    (event-type (string-ascii 20))
   )
-    (map-set social-metrics
-      { project-id: project-id }
-      (match metric-type
-        "share" { 
-          shares: (+ (get shares current-metrics) u1),
-          likes: (get likes current-metrics),
-          last-updated: block-height 
-        }
-        "like" { 
-          shares: (get shares current-metrics),
-          likes: (+ (get likes current-metrics) u1),
-          last-updated: block-height 
-        }
-        current-metrics
-      )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (event-id (+ (default-to u0 (map-get? last-event-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-timeline
+      { project-id: project-id, event-id: event-id }
+      { 
+        title: title,
+        description: description,
+        date: block-height,
+        event-type: event-type 
+      }
     )
-    (ok true)
+    (map-set last-event-id project-id event-id)
+    (ok event-id)
   )
 )
