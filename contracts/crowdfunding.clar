@@ -395,3 +395,193 @@
     new-id
   )
 )
+
+
+(define-map project-media
+  { project-id: uint, update-id: uint }
+  {
+    media-url: (string-ascii 256),
+    media-type: (string-ascii 20),
+    timestamp: uint
+  }
+)
+
+(define-public (add-project-media (project-id uint) (media-url (string-ascii 256)) (media-type (string-ascii 20)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (update-id (increment-last-update-id project-id))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-media
+      { project-id: project-id, update-id: update-id }
+      { 
+        media-url: media-url,
+        media-type: media-type,
+        timestamp: block-height 
+      }
+    )
+    (ok update-id)
+  )
+)
+
+
+
+(define-map project-team
+  { project-id: uint, member-id: principal }
+  {
+    role: (string-ascii 50),
+    join-date: uint,
+    is-active: bool
+  }
+)
+
+(define-public (add-team-member (project-id uint) (member principal) (role (string-ascii 50)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-team
+      { project-id: project-id, member-id: member }
+      { 
+        role: role,
+        join-date: block-height,
+        is-active: true 
+      }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map project-faqs
+  { project-id: uint, faq-id: uint }
+  {
+    question: (string-ascii 200),
+    answer: (string-ascii 500)
+  }
+)
+
+(define-map last-faq-id uint uint)
+
+(define-public (add-faq (project-id uint) (question (string-ascii 200)) (answer (string-ascii 500)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (faq-id (+ (default-to u0 (map-get? last-faq-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-faqs
+      { project-id: project-id, faq-id: faq-id }
+      { question: question, answer: answer }
+    )
+    (map-set last-faq-id project-id faq-id)
+    (ok faq-id)
+  )
+)
+
+
+
+(define-map project-timeline
+  { project-id: uint, event-id: uint }
+  {
+    title: (string-ascii 100),
+    description: (string-ascii 500),
+    date: uint,
+    event-type: (string-ascii 20)
+  }
+)
+
+(define-map last-event-id uint uint)
+
+(define-public (add-timeline-event 
+    (project-id uint) 
+    (title (string-ascii 100)) 
+    (description (string-ascii 500))
+    (event-type (string-ascii 20))
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (event-id (+ (default-to u0 (map-get? last-event-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-timeline
+      { project-id: project-id, event-id: event-id }
+      { 
+        title: title,
+        description: description,
+        date: block-height,
+        event-type: event-type 
+      }
+    )
+    (map-set last-event-id project-id event-id)
+    (ok event-id)
+  )
+)
+
+
+
+(define-map project-endorsements
+  { project-id: uint, endorser: principal }
+  {
+    message: (string-ascii 200),
+    credentials: (string-ascii 100),
+    timestamp: uint
+  }
+)
+
+(define-public (endorse-project 
+    (project-id uint) 
+    (message (string-ascii 200))
+    (credentials (string-ascii 100))
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (map-set project-endorsements
+      { project-id: project-id, endorser: tx-sender }
+      { 
+        message: message,
+        credentials: credentials,
+        timestamp: block-height 
+      }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map project-risks
+  { project-id: uint, risk-id: uint }
+  {
+    risk-type: (string-ascii 50),
+    description: (string-ascii 500),
+    mitigation: (string-ascii 500)
+  }
+)
+
+(define-map last-risk-id uint uint)
+
+(define-public (add-project-risk 
+    (project-id uint) 
+    (risk-type (string-ascii 50))
+    (description (string-ascii 500))
+    (mitigation (string-ascii 500))
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (risk-id (+ (default-to u0 (map-get? last-risk-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-risks
+      { project-id: project-id, risk-id: risk-id }
+      { 
+        risk-type: risk-type,
+        description: description,
+        mitigation: mitigation 
+      }
+    )
+    (map-set last-risk-id project-id risk-id)
+    (ok risk-id)
+  )
+)
