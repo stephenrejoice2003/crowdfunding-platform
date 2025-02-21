@@ -395,3 +395,31 @@
     new-id
   )
 )
+
+
+(define-map project-media
+  { project-id: uint, update-id: uint }
+  {
+    media-url: (string-ascii 256),
+    media-type: (string-ascii 20),
+    timestamp: uint
+  }
+)
+
+(define-public (add-project-media (project-id uint) (media-url (string-ascii 256)) (media-type (string-ascii 20)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (update-id (increment-last-update-id project-id))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-media
+      { project-id: project-id, update-id: update-id }
+      { 
+        media-url: media-url,
+        media-type: media-type,
+        timestamp: block-height 
+      }
+    )
+    (ok update-id)
+  )
+)
