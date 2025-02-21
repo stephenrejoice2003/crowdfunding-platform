@@ -517,3 +517,34 @@
     (ok event-id)
   )
 )
+
+
+
+(define-map project-endorsements
+  { project-id: uint, endorser: principal }
+  {
+    message: (string-ascii 200),
+    credentials: (string-ascii 100),
+    timestamp: uint
+  }
+)
+
+(define-public (endorse-project 
+    (project-id uint) 
+    (message (string-ascii 200))
+    (credentials (string-ascii 100))
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (map-set project-endorsements
+      { project-id: project-id, endorser: tx-sender }
+      { 
+        message: message,
+        credentials: credentials,
+        timestamp: block-height 
+      }
+    )
+    (ok true)
+  )
+)
