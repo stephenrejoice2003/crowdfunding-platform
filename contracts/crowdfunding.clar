@@ -423,3 +423,31 @@
     (ok update-id)
   )
 )
+
+
+
+(define-map project-team
+  { project-id: uint, member-id: principal }
+  {
+    role: (string-ascii 50),
+    join-date: uint,
+    is-active: bool
+  }
+)
+
+(define-public (add-team-member (project-id uint) (member principal) (role (string-ascii 50)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-team
+      { project-id: project-id, member-id: member }
+      { 
+        role: role,
+        join-date: block-height,
+        is-active: true 
+      }
+    )
+    (ok true)
+  )
+)
