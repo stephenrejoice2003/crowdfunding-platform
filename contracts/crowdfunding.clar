@@ -585,3 +585,163 @@
     (ok risk-id)
   )
 )
+
+
+(define-map project-votes 
+  { project-id: uint, voter: principal }
+  { vote: bool }
+)
+
+(define-public (vote-for-project (project-id uint) (support bool))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (map-set project-votes
+      { project-id: project-id, voter: tx-sender }
+      { vote: support }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map project-subscribers
+  { project-id: uint, subscriber: principal }
+  { subscribed-at: uint }
+)
+
+(define-public (subscribe-to-project (project-id uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (map-set project-subscribers
+      { project-id: project-id, subscriber: tx-sender }
+      { subscribed-at: block-height }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map referrals
+  { project-id: uint, referrer: principal }
+  { referral-count: uint, total-stakes: uint }
+)
+
+(define-public (refer-project (project-id uint) (referee principal))
+  (let (
+    (current-refs (default-to { referral-count: u0, total-stakes: u0 } 
+      (map-get? referrals { project-id: project-id, referrer: tx-sender })))
+  )
+    (map-set referrals
+      { project-id: project-id, referrer: tx-sender }
+      { 
+        referral-count: (+ (get referral-count current-refs) u1),
+        total-stakes: (get total-stakes current-refs)
+      }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map collaborations
+  { project-id: uint, collaborator: principal }
+  { 
+    role: (string-ascii 50),
+    permissions: (list 5 (string-ascii 20)),
+    active: bool
+  }
+)
+
+(define-public (add-collaborator (project-id uint) (collaborator principal) (role (string-ascii 50)) (permissions (list 5 (string-ascii 20))))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set collaborations
+      { project-id: project-id, collaborator: collaborator }
+      { role: role, permissions: permissions, active: true }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map reward-distributions
+  { project-id: uint, milestone-id: uint }
+  { 
+    total-amount: uint,
+    distributed: bool,
+    distribution-date: uint
+  }
+)
+
+(define-public (distribute-rewards (project-id uint) (milestone-id uint) (token <token-trait>))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (milestone (unwrap! (map-get? milestones { project-id: project-id, milestone-id: milestone-id }) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (get is-completed milestone) (err u405))
+    (map-set reward-distributions
+      { project-id: project-id, milestone-id: milestone-id }
+      { total-amount: (get amount milestone), distributed: true, distribution-date: block-height }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map project-analytics
+  { project-id: uint }
+  { 
+    view-count: uint,
+    unique-visitors: uint,
+    conversion-rate: uint
+  }
+)
+
+(define-public (track-project-view (project-id uint))
+  (let (
+    (current-analytics (default-to { view-count: u0, unique-visitors: u0, conversion-rate: u0 }
+      (map-get? project-analytics { project-id: project-id })))
+  )
+    (map-set project-analytics
+      { project-id: project-id }
+      (merge current-analytics { view-count: (+ (get view-count current-analytics) u1) })
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map social-shares
+  { project-id: uint, sharer: principal }
+  { 
+    platform: (string-ascii 20),
+    share-count: uint,
+    last-shared: uint
+  }
+)
+
+(define-public (record-social-share (project-id uint) (platform (string-ascii 20)))
+  (let (
+    (current-shares (default-to { platform: platform, share-count: u0, last-shared: u0 }
+      (map-get? social-shares { project-id: project-id, sharer: tx-sender })))
+  )
+    (map-set social-shares
+      { project-id: project-id, sharer: tx-sender }
+      { 
+        platform: platform,
+        share-count: (+ (get share-count current-shares) u1),
+        last-shared: block-height
+      }
+    )
+    (ok true)
+  )
+)
