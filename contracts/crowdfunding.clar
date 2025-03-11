@@ -395,3 +395,353 @@
     new-id
   )
 )
+
+
+(define-map project-media
+  { project-id: uint, update-id: uint }
+  {
+    media-url: (string-ascii 256),
+    media-type: (string-ascii 20),
+    timestamp: uint
+  }
+)
+
+(define-public (add-project-media (project-id uint) (media-url (string-ascii 256)) (media-type (string-ascii 20)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (update-id (increment-last-update-id project-id))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-media
+      { project-id: project-id, update-id: update-id }
+      { 
+        media-url: media-url,
+        media-type: media-type,
+        timestamp: block-height 
+      }
+    )
+    (ok update-id)
+  )
+)
+
+
+
+(define-map project-team
+  { project-id: uint, member-id: principal }
+  {
+    role: (string-ascii 50),
+    join-date: uint,
+    is-active: bool
+  }
+)
+
+(define-public (add-team-member (project-id uint) (member principal) (role (string-ascii 50)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-team
+      { project-id: project-id, member-id: member }
+      { 
+        role: role,
+        join-date: block-height,
+        is-active: true 
+      }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map project-faqs
+  { project-id: uint, faq-id: uint }
+  {
+    question: (string-ascii 200),
+    answer: (string-ascii 500)
+  }
+)
+
+(define-map last-faq-id uint uint)
+
+(define-public (add-faq (project-id uint) (question (string-ascii 200)) (answer (string-ascii 500)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (faq-id (+ (default-to u0 (map-get? last-faq-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-faqs
+      { project-id: project-id, faq-id: faq-id }
+      { question: question, answer: answer }
+    )
+    (map-set last-faq-id project-id faq-id)
+    (ok faq-id)
+  )
+)
+
+
+
+(define-map project-timeline
+  { project-id: uint, event-id: uint }
+  {
+    title: (string-ascii 100),
+    description: (string-ascii 500),
+    date: uint,
+    event-type: (string-ascii 20)
+  }
+)
+
+(define-map last-event-id uint uint)
+
+(define-public (add-timeline-event 
+    (project-id uint) 
+    (title (string-ascii 100)) 
+    (description (string-ascii 500))
+    (event-type (string-ascii 20))
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (event-id (+ (default-to u0 (map-get? last-event-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-timeline
+      { project-id: project-id, event-id: event-id }
+      { 
+        title: title,
+        description: description,
+        date: block-height,
+        event-type: event-type 
+      }
+    )
+    (map-set last-event-id project-id event-id)
+    (ok event-id)
+  )
+)
+
+
+
+(define-map project-endorsements
+  { project-id: uint, endorser: principal }
+  {
+    message: (string-ascii 200),
+    credentials: (string-ascii 100),
+    timestamp: uint
+  }
+)
+
+(define-public (endorse-project 
+    (project-id uint) 
+    (message (string-ascii 200))
+    (credentials (string-ascii 100))
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (map-set project-endorsements
+      { project-id: project-id, endorser: tx-sender }
+      { 
+        message: message,
+        credentials: credentials,
+        timestamp: block-height 
+      }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map project-risks
+  { project-id: uint, risk-id: uint }
+  {
+    risk-type: (string-ascii 50),
+    description: (string-ascii 500),
+    mitigation: (string-ascii 500)
+  }
+)
+
+(define-map last-risk-id uint uint)
+
+(define-public (add-project-risk 
+    (project-id uint) 
+    (risk-type (string-ascii 50))
+    (description (string-ascii 500))
+    (mitigation (string-ascii 500))
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (risk-id (+ (default-to u0 (map-get? last-risk-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set project-risks
+      { project-id: project-id, risk-id: risk-id }
+      { 
+        risk-type: risk-type,
+        description: description,
+        mitigation: mitigation 
+      }
+    )
+    (map-set last-risk-id project-id risk-id)
+    (ok risk-id)
+  )
+)
+
+
+(define-map project-votes 
+  { project-id: uint, voter: principal }
+  { vote: bool }
+)
+
+(define-public (vote-for-project (project-id uint) (support bool))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (map-set project-votes
+      { project-id: project-id, voter: tx-sender }
+      { vote: support }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map project-subscribers
+  { project-id: uint, subscriber: principal }
+  { subscribed-at: uint }
+)
+
+(define-public (subscribe-to-project (project-id uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (map-set project-subscribers
+      { project-id: project-id, subscriber: tx-sender }
+      { subscribed-at: block-height }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map referrals
+  { project-id: uint, referrer: principal }
+  { referral-count: uint, total-stakes: uint }
+)
+
+(define-public (refer-project (project-id uint) (referee principal))
+  (let (
+    (current-refs (default-to { referral-count: u0, total-stakes: u0 } 
+      (map-get? referrals { project-id: project-id, referrer: tx-sender })))
+  )
+    (map-set referrals
+      { project-id: project-id, referrer: tx-sender }
+      { 
+        referral-count: (+ (get referral-count current-refs) u1),
+        total-stakes: (get total-stakes current-refs)
+      }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map collaborations
+  { project-id: uint, collaborator: principal }
+  { 
+    role: (string-ascii 50),
+    permissions: (list 5 (string-ascii 20)),
+    active: bool
+  }
+)
+
+(define-public (add-collaborator (project-id uint) (collaborator principal) (role (string-ascii 50)) (permissions (list 5 (string-ascii 20))))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set collaborations
+      { project-id: project-id, collaborator: collaborator }
+      { role: role, permissions: permissions, active: true }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map reward-distributions
+  { project-id: uint, milestone-id: uint }
+  { 
+    total-amount: uint,
+    distributed: bool,
+    distribution-date: uint
+  }
+)
+
+(define-public (distribute-rewards (project-id uint) (milestone-id uint) (token <token-trait>))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (milestone (unwrap! (map-get? milestones { project-id: project-id, milestone-id: milestone-id }) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (get is-completed milestone) (err u405))
+    (map-set reward-distributions
+      { project-id: project-id, milestone-id: milestone-id }
+      { total-amount: (get amount milestone), distributed: true, distribution-date: block-height }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map project-analytics
+  { project-id: uint }
+  { 
+    view-count: uint,
+    unique-visitors: uint,
+    conversion-rate: uint
+  }
+)
+
+(define-public (track-project-view (project-id uint))
+  (let (
+    (current-analytics (default-to { view-count: u0, unique-visitors: u0, conversion-rate: u0 }
+      (map-get? project-analytics { project-id: project-id })))
+  )
+    (map-set project-analytics
+      { project-id: project-id }
+      (merge current-analytics { view-count: (+ (get view-count current-analytics) u1) })
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map social-shares
+  { project-id: uint, sharer: principal }
+  { 
+    platform: (string-ascii 20),
+    share-count: uint,
+    last-shared: uint
+  }
+)
+
+(define-public (record-social-share (project-id uint) (platform (string-ascii 20)))
+  (let (
+    (current-shares (default-to { platform: platform, share-count: u0, last-shared: u0 }
+      (map-get? social-shares { project-id: project-id, sharer: tx-sender })))
+  )
+    (map-set social-shares
+      { project-id: project-id, sharer: tx-sender }
+      { 
+        platform: platform,
+        share-count: (+ (get share-count current-shares) u1),
+        last-shared: block-height
+      }
+    )
+    (ok true)
+  )
+)
