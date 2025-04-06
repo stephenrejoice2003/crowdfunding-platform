@@ -745,3 +745,344 @@
     (ok true)
   )
 )
+
+
+
+(define-public (withdraw-funds (project-id uint) (token <token-trait>))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (owner (get owner project))
+    (amount (get current-amount project))
+  )
+    (asserts! (is-eq tx-sender owner) (err u403))
+    (asserts! (>= amount (get goal project)) (err u406))
+    (asserts! (> block-height (get deadline project)) (err u407))
+    (try! (as-contract (contract-call? token transfer tx-sender owner amount)))
+    (map-set projects
+      { id: project-id }
+      (merge project { current-amount: u0 })
+    )
+    (ok amount)
+  )
+)
+
+(define-map category-projects
+  { category: (string-ascii 64) }
+  { project-ids: (list 100 uint) }
+)
+
+(define-public (add-project-to-category (project-id uint) (category (string-ascii 64)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (current-list (default-to { project-ids: (list) } (map-get? category-projects { category: category })))
+    (updated-list (unwrap! (as-max-len? (append (get project-ids current-list) project-id) u100) (err u408)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (map-set category-projects
+      { category: category }
+      { project-ids: updated-list }
+    )
+    (ok true)
+  )
+)
+
+(define-read-only (get-projects-by-category (category (string-ascii 64)))
+  (default-to { project-ids: (list) } (map-get? category-projects { category: category }))
+)
+
+
+
+(define-data-var contract-owner principal tx-sender)
+
+(define-map featured-projects
+  { project-id: uint }
+  { 
+    featured-at: uint,
+    featured-until: uint,
+    featured-reason: (string-ascii 100)
+  }
+)
+
+(define-public (set-featured-project (project-id uint) (duration uint) (reason (string-ascii 100)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (featured-until (+ block-height duration))
+  )
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err u403))
+    (map-set featured-projects
+      { project-id: project-id }
+      { 
+        featured-at: block-height,
+        featured-until: featured-until,
+        featured-reason: reason
+      }
+    )
+    (ok true)
+  )
+)
+
+(define-read-only (is-project-featured (project-id uint))
+  (let (
+    (featured-info (map-get? featured-projects { project-id: project-id }))
+  )
+    (and 
+      (is-some featured-info)
+      (< block-height (get featured-until (unwrap! featured-info false)))
+    )
+  )
+)
+
+
+(define-map project-reports
+  { project-id: uint, reporter: principal }
+  { 
+    reason: (string-ascii 200),
+    timestamp: uint,
+    status: (string-ascii 20)
+  }
+)
+
+(define-map project-report-count
+  { project-id: uint }
+  { count: uint }
+)
+
+(define-public (report-project (project-id uint) (reason (string-ascii 200)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (current-count (default-to { count: u0 } (map-get? project-report-count { project-id: project-id })))
+  )
+    (map-set project-reports
+      { project-id: project-id, reporter: tx-sender }
+      { 
+        reason: reason,
+        timestamp: block-height,
+        status: "pending"
+      }
+    )
+    (map-set project-report-count
+      { project-id: project-id }
+      { count: (+ (get count current-count) u1) }
+    )
+    (ok true)
+  )
+)
+
+(define-public (resolve-report (project-id uint) (reporter principal) (new-status (string-ascii 20)))
+  (let (
+    (report (unwrap! (map-get? project-reports { project-id: project-id, reporter: reporter }) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err u403))
+    (map-set project-reports
+      { project-id: project-id, reporter: reporter }
+      (merge report { status: new-status })
+    )
+    (ok true)
+  )
+)
+
+
+(define-map verified-projects
+  { project-id: uint }
+  { 
+    verified-by: principal,
+    verified-at: uint,
+    verification-level: uint
+  }
+)
+
+(define-map verifiers
+  { address: principal }
+  { is-active: bool }
+)
+
+(define-public (add-verifier (verifier principal))
+  (begin
+    (asserts! (is-eq tx-sender (var-get contract-owner)) (err u403))
+    (map-set verifiers
+      { address: verifier }
+      { is-active: true }
+    )
+    (ok true)
+  )
+)
+
+(define-public (verify-project (project-id uint) (level uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (verifier-status (default-to { is-active: false } (map-get? verifiers { address: tx-sender })))
+  )
+    (asserts! (get is-active verifier-status) (err u403))
+    (asserts! (<= level u3) (err u400))
+    (map-set verified-projects
+      { project-id: project-id }
+      { 
+        verified-by: tx-sender,
+        verified-at: block-height,
+        verification-level: level
+      }
+    )
+    (ok true)
+  )
+)
+
+
+
+(define-map user-bookmarks
+  { user: principal }
+  { bookmarked-projects: (list 100 uint) }
+)
+
+(define-public (bookmark-project (project-id uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (current-bookmarks (default-to { bookmarked-projects: (list) } (map-get? user-bookmarks { user: tx-sender })))
+    (updated-bookmarks (unwrap! (as-max-len? (append (get bookmarked-projects current-bookmarks) project-id) u100) (err u408)))
+  )
+    (map-set user-bookmarks
+      { user: tx-sender }
+      { bookmarked-projects: updated-bookmarks }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map stretch-goals
+  { project-id: uint, goal-id: uint }
+  { 
+    amount: uint,
+    description: (string-ascii 200),
+    is-reached: bool
+  }
+)
+
+(define-map last-stretch-goal-id uint uint)
+
+(define-public (add-stretch-goal (project-id uint) (amount uint) (description (string-ascii 200)))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (goal-id (+ (default-to u0 (map-get? last-stretch-goal-id project-id)) u1))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (> amount (get goal project)) (err u400))
+    (map-set stretch-goals
+      { project-id: project-id, goal-id: goal-id }
+      { 
+        amount: amount,
+        description: description,
+        is-reached: false
+      }
+    )
+    (map-set last-stretch-goal-id project-id goal-id)
+    (ok goal-id)
+  )
+)
+
+(define-public (update-stretch-goal-status (project-id uint) (goal-id uint))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (stretch-goal (unwrap! (map-get? stretch-goals { project-id: project-id, goal-id: goal-id }) (err u404)))
+    (current-amount (get current-amount project))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (>= current-amount (get amount stretch-goal)) (err u400))
+    (map-set stretch-goals
+      { project-id: project-id, goal-id: goal-id }
+      (merge stretch-goal { is-reached: true })
+    )
+    (ok true)
+  )
+)
+
+
+(define-map project-polls
+  { project-id: uint, poll-id: uint }
+  { 
+    title: (string-ascii 100),
+    description: (string-ascii 200),
+    options: (list 5 (string-ascii 50)),
+    deadline: uint,
+    is-active: bool
+  }
+)
+
+(define-map poll-votes
+  { project-id: uint, poll-id: uint, voter: principal }
+  { option-index: uint }
+)
+
+(define-map poll-results
+  { project-id: uint, poll-id: uint, option-index: uint }
+  { vote-count: uint }
+)
+
+(define-map last-poll-id uint uint)
+
+(define-public (create-poll 
+    (project-id uint) 
+    (title (string-ascii 100)) 
+    (description (string-ascii 200))
+    (options (list 5 (string-ascii 50)))
+    (duration uint)
+  )
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (poll-id (+ (default-to u0 (map-get? last-poll-id project-id)) u1))
+    (deadline (+ block-height duration))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (> (len options) u1) (err u400))
+    (map-set project-polls
+      { project-id: project-id, poll-id: poll-id }
+      { 
+        title: title,
+        description: description,
+        options: options,
+        deadline: deadline,
+        is-active: true
+      }
+    )
+    (map-set last-poll-id project-id poll-id)
+    (ok poll-id)
+  )
+)
+
+(define-public (vote-in-poll (project-id uint) (poll-id uint) (option-index uint))
+  (let (
+    (poll (unwrap! (map-get? project-polls { project-id: project-id, poll-id: poll-id }) (err u404)))
+    (stake-info (unwrap! (map-get? stakes { project-id: project-id, staker: tx-sender }) (err u404)))
+    (current-votes (default-to { vote-count: u0 } (map-get? poll-results { project-id: project-id, poll-id: poll-id, option-index: option-index })))
+  )
+    (asserts! (get is-active poll) (err u403))
+    (asserts! (< block-height (get deadline poll)) (err u403))
+    (asserts! (< option-index (len (get options poll))) (err u400))
+    (map-set poll-votes
+      { project-id: project-id, poll-id: poll-id, voter: tx-sender }
+      { option-index: option-index }
+    )
+    (map-set poll-results
+      { project-id: project-id, poll-id: poll-id, option-index: option-index }
+      { vote-count: (+ (get vote-count current-votes) u1) }
+    )
+    (ok true)
+  )
+)
+
+(define-public (close-poll (project-id uint) (poll-id uint))
+  (let (
+    (poll (unwrap! (map-get? project-polls { project-id: project-id, poll-id: poll-id }) (err u404)))
+    (project (unwrap! (get-project project-id) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (get is-active poll) (err u403))
+    (map-set project-polls
+      { project-id: project-id, poll-id: poll-id }
+      (merge poll { is-active: false })
+    )
+    (ok true)
+  )
+)
+
+
+
