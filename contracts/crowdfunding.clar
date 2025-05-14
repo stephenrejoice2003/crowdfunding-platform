@@ -1086,3 +1086,82 @@
 
 
 
+(define-map milestone-votes
+  { project-id: uint, milestone-id: uint, voter: principal }
+  { approved: bool }
+)
+
+(define-map milestone-vote-counts
+  { project-id: uint, milestone-id: uint }
+  { approve-count: uint, reject-count: uint }
+)
+
+(define-public (vote-on-milestone (project-id uint) (milestone-id uint) (approve bool))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (milestone (unwrap! (map-get? milestones { project-id: project-id, milestone-id: milestone-id }) (err u404)))
+    (stake-info (unwrap! (map-get? stakes { project-id: project-id, staker: tx-sender }) (err u404)))
+    (current-counts (default-to { approve-count: u0, reject-count: u0 } 
+      (map-get? milestone-vote-counts { project-id: project-id, milestone-id: milestone-id })))
+  )
+    (asserts! (not (get is-completed milestone)) (err u400))
+    (map-set milestone-votes
+      { project-id: project-id, milestone-id: milestone-id, voter: tx-sender }
+      { approved: approve }
+    )
+    (map-set milestone-vote-counts
+      { project-id: project-id, milestone-id: milestone-id }
+      {
+        approve-count: (if approve (+ (get approve-count current-counts) u1) (get approve-count current-counts)),
+        reject-count: (if (not approve) (+ (get reject-count current-counts) u1) (get reject-count current-counts))
+      }
+    )
+    (ok true)
+  )
+)
+
+
+(define-map escrow-balances
+  { project-id: uint }
+  { 
+    total-locked: uint,
+    total-released: uint
+  }
+)
+
+(define-public (lock-funds-in-escrow (project-id uint) (amount uint) (token <token-trait>))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (current-escrow (default-to { total-locked: u0, total-released: u0 } 
+      (map-get? escrow-balances { project-id: project-id })))
+  )
+    (try! (contract-call? token transfer tx-sender (as-contract tx-sender) amount))
+    (map-set escrow-balances
+      { project-id: project-id }
+      {
+        total-locked: (+ (get total-locked current-escrow) amount),
+        total-released: (get total-released current-escrow)
+      }
+    )
+    (ok true)
+  )
+)
+
+(define-public (release-escrow-funds (project-id uint) (amount uint) (token <token-trait>))
+  (let (
+    (project (unwrap! (get-project project-id) (err u404)))
+    (current-escrow (unwrap! (map-get? escrow-balances { project-id: project-id }) (err u404)))
+  )
+    (asserts! (is-eq tx-sender (get owner project)) (err u403))
+    (asserts! (<= amount (- (get total-locked current-escrow) (get total-released current-escrow))) (err u400))
+    (try! (as-contract (contract-call? token transfer tx-sender (get owner project) amount)))
+    (map-set escrow-balances
+      { project-id: project-id }
+      {
+        total-locked: (get total-locked current-escrow),
+        total-released: (+ (get total-released current-escrow) amount)
+      }
+    )
+    (ok true)
+  )
+)
