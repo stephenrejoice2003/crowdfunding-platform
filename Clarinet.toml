@@ -9,6 +9,16 @@ requirements = []
 path = 'contracts/crowdfunding.clar'
 clarity_version = 2
 epoch = 2.5
+
+[contracts.dynamic-funding-tier]
+path = 'contracts/dynamic-funding-tier.clar'
+clarity_version = 3
+epoch = 3.1
+
+[contracts.milestone-escrow]
+path = 'contracts/milestone-escrow.clar'
+clarity_version = 3
+epoch = 3.1
 [repl.analysis]
 passes = ['check_checker']
 
