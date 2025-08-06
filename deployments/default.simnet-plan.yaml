@@ -67,4 +67,9 @@ plan:
             emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
             path: "contracts\\milestone-escrow.clar"
             clarity-version: 3
+        - emulated-contract-publish:
+            contract-name: reputation-trust-system
+            emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
+            path: "contracts\\reputation-trust-system.clar"
+            clarity-version: 3
       epoch: "3.1"
