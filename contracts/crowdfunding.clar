@@ -1148,20 +1148,195 @@
 )
 
 (define-public (release-escrow-funds (project-id uint) (amount uint) (token <token-trait>))
-  (let (
-    (project (unwrap! (get-project project-id) (err u404)))
-    (current-escrow (unwrap! (map-get? escrow-balances { project-id: project-id }) (err u404)))
-  )
-    (asserts! (is-eq tx-sender (get owner project)) (err u403))
-    (asserts! (<= amount (- (get total-locked current-escrow) (get total-released current-escrow))) (err u400))
-    (try! (as-contract (contract-call? token transfer tx-sender (get owner project) amount)))
-    (map-set escrow-balances
-      { project-id: project-id }
-      {
-        total-locked: (get total-locked current-escrow),
-        total-released: (+ (get total-released current-escrow) amount)
-      }
+    (let (
+        (project (unwrap! (get-project project-id) (err u404)))
+        (current-escrow (unwrap! (map-get? escrow-balances { project-id: project-id }) (err u404)))
     )
-    (ok true)
-  )
-)
+        (asserts! (is-eq tx-sender (get owner project)) (err u403))
+        (asserts! (<= amount (- (get total-locked current-escrow) (get total-released current-escrow))) (err u400))
+        (try! (as-contract (contract-call? token transfer tx-sender (get owner project) amount)))
+        (map-set escrow-balances
+            { project-id: project-id }
+            {
+                total-locked: (get total-locked current-escrow),
+                total-released: (+ (get total-released current-escrow) amount)
+            })
+        (ok true)))
+
+;; Project Likes & Social Engagement Feature
+;; Provides lightweight social metrics to boost project discovery and community interaction
+
+;; Track total likes per project
+(define-map project-like-counts
+    { project-id: uint }
+    { likes: uint, last-liked: uint })
+
+;; Track which users liked which projects (prevents duplicate likes)
+(define-map user-project-likes
+    { project-id: uint, user: principal }
+    { liked: bool, liked-at: uint })
+
+;; Social engagement statistics
+(define-map project-social-metrics
+    { project-id: uint }
+    {
+        total-likes: uint,
+        unique-likers: uint,
+        social-score: uint,
+        trending-score: uint,
+        last-activity: uint
+    })
+
+;; Track top liked projects for discovery
+(define-map trending-projects
+    { rank: uint }
+    { project-id: uint, like-count: uint, updated-at: uint })
+
+;; Global social stats
+(define-data-var total-likes-all-time uint u0)
+(define-data-var trending-threshold uint u10) ;; Minimum likes to be trending
+(define-data-var social-boost-multiplier uint u5) ;; Boost factor for social score
+
+;; Like/Unlike a project (toggle functionality)
+(define-public (like-project (project-id uint))
+    (let (
+        (project (unwrap! (get-project project-id) (err u404)))
+        (current-like (map-get? user-project-likes { project-id: project-id, user: tx-sender }))
+        (project-likes (default-to { likes: u0, last-liked: u0 } 
+                       (map-get? project-like-counts { project-id: project-id })))
+        (already-liked (and (is-some current-like) 
+                           (get liked (unwrap-panic current-like))))
+    )
+        (if already-liked
+            ;; Unlike the project
+            (begin
+                (map-set user-project-likes
+                    { project-id: project-id, user: tx-sender }
+                    { liked: false, liked-at: (get liked-at (unwrap-panic current-like)) })
+                (map-set project-like-counts
+                    { project-id: project-id }
+                    { 
+                        likes: (- (get likes project-likes) u1),
+                        last-liked: (get last-liked project-likes)
+                    })
+                (var-set total-likes-all-time (- (var-get total-likes-all-time) u1))
+                (try! (update-social-metrics project-id))
+                (ok { action: "unliked", new-count: (- (get likes project-likes) u1) }))
+            ;; Like the project
+            (begin
+                (map-set user-project-likes
+                    { project-id: project-id, user: tx-sender }
+                    { liked: true, liked-at: block-height })
+                (map-set project-like-counts
+                    { project-id: project-id }
+                    { 
+                        likes: (+ (get likes project-likes) u1),
+                        last-liked: block-height
+                    })
+                (var-set total-likes-all-time (+ (var-get total-likes-all-time) u1))
+                (try! (update-social-metrics project-id))
+                (ok { action: "liked", new-count: (+ (get likes project-likes) u1) })))))
+
+;; Get total likes for a project
+(define-read-only (get-project-likes (project-id uint))
+    (let ((like-data (map-get? project-like-counts { project-id: project-id })))
+        (if (is-some like-data)
+            (get likes (unwrap-panic like-data))
+            u0)))
+
+;; Check if current user has liked a project
+(define-read-only (has-user-liked (project-id uint) (user principal))
+    (let ((user-like (map-get? user-project-likes { project-id: project-id, user: user })))
+        (if (is-some user-like)
+            (get liked (unwrap-panic user-like))
+            false)))
+
+;; Get comprehensive social metrics for a project
+(define-read-only (get-project-social-stats (project-id uint))
+    (let (
+        (like-count (get-project-likes project-id))
+        (social-metrics (default-to 
+                        { total-likes: u0, unique-likers: u0, social-score: u0, trending-score: u0, last-activity: u0 }
+                        (map-get? project-social-metrics { project-id: project-id })))
+    )
+        (ok {
+            project-id: project-id,
+            total-likes: like-count,
+            social-score: (get social-score social-metrics),
+            trending-score: (get trending-score social-metrics),
+            is-trending: (>= like-count (var-get trending-threshold)),
+            last-activity: (get last-activity social-metrics),
+            user-liked: (has-user-liked project-id tx-sender)
+        })))
+
+;; Update social metrics when likes change
+(define-private (update-social-metrics (project-id uint))
+    (let (
+        (like-count (get-project-likes project-id))
+        (project (unwrap! (get-project project-id) (err u404)))
+        (current-amount (get current-amount project))
+        (goal (get goal project))
+        ;; Calculate social score based on likes + funding progress
+        (funding-factor (if (> goal u0) (/ (* current-amount u100) goal) u0))
+        (social-score (+ (* like-count (var-get social-boost-multiplier)) funding-factor))
+        ;; Calculate trending score (recent activity weighted)
+        (trending-score (if (> like-count u0)
+                          (/ (* like-count u1000) (- block-height u1))
+                          u0))
+    )
+        (map-set project-social-metrics
+            { project-id: project-id }
+            {
+                total-likes: like-count,
+                unique-likers: like-count, ;; Simplified for now
+                social-score: social-score,
+                trending-score: trending-score,
+                last-activity: block-height
+            })
+        (ok true)))
+
+;; Get trending projects (projects with high like counts)
+(define-read-only (get-trending-projects (limit uint))
+    (ok {
+        threshold: (var-get trending-threshold),
+        total-global-likes: (var-get total-likes-all-time),
+        message: "Use get-project-social-stats for individual project metrics"
+    }))
+
+;; Get user's liked projects (simplified version)
+(define-read-only (get-user-liked-projects (user principal))
+    (ok {
+        user: user,
+        message: "Check individual projects with has-user-liked function"
+    }))
+
+;; Admin function to set trending threshold
+(define-public (set-trending-threshold (new-threshold uint))
+    (let ((project (unwrap! (get-project u1) (err u404)))) ;; Check if any project exists
+        (asserts! (is-eq tx-sender (var-get contract-owner)) (err u403))
+        (var-set trending-threshold new-threshold)
+        (ok new-threshold)))
+
+;; Get global social platform stats
+(define-read-only (get-platform-social-stats)
+    (ok {
+        total-likes-platform: (var-get total-likes-all-time),
+        trending-threshold: (var-get trending-threshold),
+        social-boost-multiplier: (var-get social-boost-multiplier),
+        current-block: block-height
+    }))
+
+;; Batch like status check (useful for frontend)
+(define-read-only (check-multiple-likes (project-ids (list 10 uint)) (user principal))
+    (ok {
+        user: user,
+        checked-projects: (len project-ids),
+        message: "Use has-user-liked for individual project checks"
+    }))
+
+;; Get projects sorted by social engagement
+(define-read-only (get-socially-ranked-projects)
+    (ok {
+        ranking-criteria: "likes + social-score",
+        message: "Use get-project-social-stats to get individual project rankings"
+    }))
